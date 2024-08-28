@@ -38,10 +38,27 @@ function getBrowserInfo() {
     if (userAgent.includes('Nokia') || userAgent.includes('Mobile')) {
         return 'Mobile Browser';
     }
+    if (userAgent.includes('BIDUBrowser')) {
+        return 'Baidu Browser';
+    }
+    if (userAgent.includes('QQBrowser')) {
+        return 'QQ Browser';
+    }
+    if (userAgent.includes('360Browser')) {
+        return '360 Browser';
+    }
+    if (userAgent.includes('UCBrowser')) {
+        return 'UC Browser';
+    }
+    if (userAgent.includes('QHBrowser')) {
+        return 'Quark Browser';
+    }
+    if (userAgent.includes('LBBROWSER')) {
+        return 'LBBrowser'; // LBE Browser
+    }
 
     return 'Unknown Browser'; // Fallback for unknown browsers
 }
-
 // Function to load SweetAlert2 and initialize the welcome alert
 function initializeWelcome() {
     // Check if SweetAlert2 is already loaded
