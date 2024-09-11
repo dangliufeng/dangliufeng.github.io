@@ -26,6 +26,145 @@
       </tags>
   </entry>
   <entry>
+    <title>轻量级的日志系统</title>
+    <url>/2024/08/28/%E8%BD%BB%E9%87%8F%E7%BA%A7%E7%9A%84%E6%97%A5%E5%BF%97%E7%B3%BB%E7%BB%9F/</url>
+    <content><![CDATA[<h1 id="轻量级日志系统-Loki-Loki4j-Grafana-实践"><a href="#轻量级日志系统-Loki-Loki4j-Grafana-实践" class="headerlink" title="轻量级日志系统(Loki + Loki4j + Grafana)实践"></a>轻量级日志系统(Loki + Loki4j + Grafana)实践</h1><h2 id="常见的日志监控系统"><a href="#常见的日志监控系统" class="headerlink" title="常见的日志监控系统"></a>常见的日志监控系统</h2><p>平时在构建日志管理系统时，传统的、重量级的ELK Stack当仁不让,除了它之外还有几个常见的选择：</p>
+<ul>
+<li><p><strong>Splunk</strong>:</p>
+<ul>
+<li>强大的商业日志管理和分析平台，提供实时搜索、监控和警报功能。</li>
+<li>用户界面友好，适用于大规模的日志数据收集和分析需求。</li>
+</ul>
+</li>
+<li><p><strong>Graylog</strong>:</p>
+<ul>
+<li>开源的日志管理平台，支持实时流式处理和数据分析。</li>
+<li>提供强大的搜索和可视化功能，适合中小型企业和开发团队使用。</li>
+</ul>
+</li>
+<li><p><strong>Fluentd</strong>:</p>
+<ul>
+<li>开源的数据收集器，设计用于大规模数据流处理。</li>
+<li>支持灵活的数据传输和转换，可以与多种数据存储系统集成。</li>
+</ul>
+</li>
+<li><p><strong>Prometheus + Grafana</strong>:</p>
+<ul>
+<li><p>Prometheus是一个开源的监控和警报工具，专注于时序数据的收集和存储。</p>
+</li>
+<li><p>Grafana作为其可视化和仪表板工具，与Prometheus紧密集成，用于监控数据的可视化展示。</p>
+</li>
+</ul>
+</li>
+</ul>
+<blockquote>
+<p><em>我今天实践的是由<strong>Grafana Labs</strong>开发的日志聚合系统，它专注于高效率地收集和存储日志，使用标签而不是索引来组织日志数据，使其在大规模环境中更具可扩展性（轻量级）。想我这种叼毛的服务器装上Elasticsearch+Kibana基本就.gg了别说运行程序了了。</em></p>
+</blockquote>
+<h2 id="所需组件简介"><a href="#所需组件简介" class="headerlink" title="所需组件简介"></a>所需组件简介</h2><p>想要使用轻量级日志系统（Loki + Loki4j + Grafana），首先要理解每个组件的作用和优势：</p>
+<h3 id="什么是-Loki？"><a href="#什么是-Loki？" class="headerlink" title="什么是 Loki？"></a>什么是 Loki？</h3><blockquote>
+<p><strong>Loki</strong> 是由Grafana Labs开发的开源日志聚合系统，专为高效处理和可视化大规模分布式系统的日志数据而设计。与传统的日志系统不同，Loki使用标签索引而非传统的文档索引存储日志数据，这种方式提升了查询效率和存储效率，尤其适合大规模环境的应用。</p>
+</blockquote>
+<h3 id="什么是Loki4j？"><a href="#什么是Loki4j？" class="headerlink" title="什么是Loki4j？"></a>什么是Loki4j？</h3><blockquote>
+<p><strong>Loki4j</strong> 是专为Java应用程序设计的日志库，用于将应用程序的日志数据发送到Loki服务器。它提供简单的API接口，使得在Java应用中集成Loki变得更加便捷高效，充分利用Loki的强大存储和检索能力。</p>
+</blockquote>
+<h3 id="什么是Grafana？"><a href="#什么是Grafana？" class="headerlink" title="什么是Grafana？"></a>什么是Grafana？</h3><p>当谈论Grafana时，可以将其描述为一个强大且灵活的开源数据可视化和监控平台。它最初是为了监控系统指标而开发的，但现在已经发展成为支持多种数据源的广泛应用工具。</p>
+<blockquote>
+<p><strong>Grafana</strong> 是一款开源的数据分析和可视化平台，最初用于监控数据展示和分析。现在，Grafana不仅支持各种数据源（如时序数据库、日志数据库、关系型数据库等），还提供丰富的图表选项和仪表板配置，用户可以通过简单的拖拽操作快速创建和定制监控和分析场景。Grafana还拥有强大的警报功能，帮助用户实时响应数据异常情况。</p>
+</blockquote>
+<h2 id="实践过程"><a href="#实践过程" class="headerlink" title="实践过程"></a>实践过程</h2><h3 id="1-安装Loki和Grafana"><a href="#1-安装Loki和Grafana" class="headerlink" title="1. 安装Loki和Grafana"></a>1. 安装Loki和Grafana</h3><pre><code>[root@bogon ~]# docker run -d --name loki -p 3100:3100 grafana/loki:latest -config.file=/etc/loki/local-config.yaml
+[root@bogon ~]# docker run -d --name grafana -p 3000:3000 grafana/grafana:latest
+</code></pre>
+<p>有需要的可以将配置、数据和日志文件保存到宿主机。</p>
+<blockquote>
+<p>grafana组件安装好后可以过127.0.0.1:3000进入操作页面，默认账号密码:admin。</p>
+</blockquote>
+<p>登录成功以后可以先测试连接loki测试是否连通</p>
+<ol>
+<li>进入Data Source页面Add data source</li>
+</ol>
+<p><img src="https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e5e133cdec2b4a57aa8eca282b3b0384~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2533&h=1303&s=307292&e=png&b=191c21" alt="image-20240619172307402.png"></p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/dde9a1393d044bfbbfb71da706a40a4e~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2283&h=1146&s=64145&e=png&b=191b20" alt="image-20240619172415963.png"></p>
+<ol start="2">
+<li>点击后输入框搜索Loki后点击填写数据，填写完成后点击Save &amp; test后</li>
+</ol>
+<p><img src="https://p1-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/85e55f45bf884fb9a79d699742d127da~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2541&h=1033&s=76315&e=png&b=111217" alt="image-20240619174025971.png"></p>
+<h3 id="2-配置Loki4j"><a href="#2-配置Loki4j" class="headerlink" title="2. 配置Loki4j"></a>2. 配置Loki4j</h3><p><strong>引入jar包</strong></p>
+<blockquote>
+<pre><code>&lt;dependency&gt;
+ &lt;groupId&gt;com.github.loki4j&lt;/groupId&gt;
+ &lt;artifactId&gt;loki-logback-appender&lt;/artifactId&gt;
+ &lt;version&gt;1.4.1&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+</blockquote>
+<p><strong>在src&#x2F;main&#x2F;resources下创建logback.xml</strong></p>
+<blockquote>
+<pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;configuration&gt;
+ &lt;!-- 引入Spring应用名称 --&gt;
+ &lt;springProperty scope=&quot;context&quot; name=&quot;name&quot; source=&quot;spring.application.name&quot;/&gt;
+ &lt;!-- 控制台输出器 --&gt;
+ &lt;appender name=&quot;CONSOLE&quot; class=&quot;ch.qos.logback.core.ConsoleAppender&quot;&gt;
+     &lt;encoder&gt;
+         &lt;pattern&gt;%d&#123;yyyy-MM-dd HH:mm:ss.SSS&#125; [thread %thread] %-5level %logger&#123;36&#125;.%method - $&#123;name&#125; - %msg%n&lt;/pattern&gt;
+     &lt;/encoder&gt;
+ &lt;/appender&gt;
+
+ &lt;!-- Loki输出器 --&gt;
+ &lt;appender name=&quot;LOKI&quot; class=&quot;com.github.loki4j.logback.Loki4jAppender&quot;&gt;
+     &lt;http&gt;
+         &lt;url&gt;http://192.168.56.102:3100/loki/api/v1/push&lt;/url&gt;
+     &lt;/http&gt;
+     &lt;format&gt;
+         &lt;label&gt;
+             &lt;pattern&gt;application=$&#123;name&#125;,level=%level&lt;/pattern&gt;
+             &lt;readMarkers&gt;true&lt;/readMarkers&gt;
+         &lt;/label&gt;
+         &lt;message&gt;
+             &lt;pattern&gt;
+                 &#123;&quot;timestamp&quot;: &quot;%d&#123;yyyy-MM-dd HH:mm:ss.SSS&#125;&quot;, &quot;level&quot;: &quot;%level&quot;, &quot;logger&quot;: &quot;%logger&#123;36&#125;.%method&quot;, &quot;method&quot;:&quot;%M&quot;, &quot;line&quot;:&quot;%line&quot;, &quot;thread&quot;: &quot;%thread&quot;, &quot;message&quot;: &quot;%msg%n&quot;&#125;
+             &lt;/pattern&gt;
+         &lt;/message&gt;
+         &lt;sortByTime&gt;true&lt;/sortByTime&gt;
+     &lt;/format&gt;
+ &lt;/appender&gt;
+
+ &lt;root level=&quot;INFO&quot;&gt;
+     &lt;appender-ref ref=&quot;CONSOLE&quot;/&gt;
+     &lt;appender-ref ref=&quot;LOKI&quot;/&gt;
+ &lt;/root&gt;
+
+&lt;/configuration&gt;
+</code></pre>
+</blockquote>
+<p>在 <strong>application.yml</strong>中</p>
+<blockquote>
+<pre><code>spring:
+application:
+ name: blog
+</code></pre>
+</blockquote>
+<p>配置完成后运行程序就可以去garafana查看日志了</p>
+<h3 id="3-查看日志"><a href="#3-查看日志" class="headerlink" title="3. 查看日志"></a>3. 查看日志</h3><p>进入garafana按照步骤就可以查看日志了</p>
+<p><img src="https://p6-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/57c43bd3a14e43c7b869228ce8b9a44f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2536&h=1338&s=322720&e=png&b=191c20" alt="image-20240619230211998.png"><br>此外Loki还支持<a href="https://grafana.com/docs/loki/latest/reference/loki-http-api/">HTTP API</a>的形式操作数据,具体的可以看官网文档。</p>
+]]></content>
+      <categories>
+        <category>Java开发</category>
+        <category>日志管理</category>
+        <category>监控与可视化</category>
+        <category>DevOps工具</category>
+      </categories>
+      <tags>
+        <tag>JAVA</tag>
+        <tag>Loki</tag>
+        <tag>Loki4j</tag>
+        <tag>Grafana</tag>
+        <tag>日志管理</tag>
+        <tag>可视化</tag>
+        <tag>监控工具</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>让你Docker从入门到精通</title>
     <url>/2024/08/28/%E8%AE%A9%E4%BD%A0Docker%E4%BB%8E%E5%85%A5%E9%97%A8%E5%88%B0%E7%B2%BE%E9%80%9A/</url>
     <content><![CDATA[<h1 id="Docker-学习笔记"><a href="#Docker-学习笔记" class="headerlink" title="Docker 学习笔记"></a>Docker 学习笔记</h1><p>[toc]</p>
@@ -351,9 +490,9 @@
 <p><strong>在容器数量较少的场景下</strong>，我们docker-compose工具已经够用，但如果<strong>容器数量较多</strong>的情况下，我们就需要用一个更便捷的管理工具<strong>k8s</strong>了。</p>
 ]]></content>
       <categories>
+        <category>DevOps工具</category>
         <category>云计算</category>
         <category>运维</category>
-        <category>DevOps工具</category>
       </categories>
       <tags>
         <tag>云技术</tag>
@@ -361,145 +500,6 @@
         <tag>Docker</tag>
         <tag>容器技术</tag>
         <tag>DevOps</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>轻量级的日志系统</title>
-    <url>/2024/08/28/%E8%BD%BB%E9%87%8F%E7%BA%A7%E7%9A%84%E6%97%A5%E5%BF%97%E7%B3%BB%E7%BB%9F/</url>
-    <content><![CDATA[<h1 id="轻量级日志系统-Loki-Loki4j-Grafana-实践"><a href="#轻量级日志系统-Loki-Loki4j-Grafana-实践" class="headerlink" title="轻量级日志系统(Loki + Loki4j + Grafana)实践"></a>轻量级日志系统(Loki + Loki4j + Grafana)实践</h1><h2 id="常见的日志监控系统"><a href="#常见的日志监控系统" class="headerlink" title="常见的日志监控系统"></a>常见的日志监控系统</h2><p>平时在构建日志管理系统时，传统的、重量级的ELK Stack当仁不让,除了它之外还有几个常见的选择：</p>
-<ul>
-<li><p><strong>Splunk</strong>:</p>
-<ul>
-<li>强大的商业日志管理和分析平台，提供实时搜索、监控和警报功能。</li>
-<li>用户界面友好，适用于大规模的日志数据收集和分析需求。</li>
-</ul>
-</li>
-<li><p><strong>Graylog</strong>:</p>
-<ul>
-<li>开源的日志管理平台，支持实时流式处理和数据分析。</li>
-<li>提供强大的搜索和可视化功能，适合中小型企业和开发团队使用。</li>
-</ul>
-</li>
-<li><p><strong>Fluentd</strong>:</p>
-<ul>
-<li>开源的数据收集器，设计用于大规模数据流处理。</li>
-<li>支持灵活的数据传输和转换，可以与多种数据存储系统集成。</li>
-</ul>
-</li>
-<li><p><strong>Prometheus + Grafana</strong>:</p>
-<ul>
-<li><p>Prometheus是一个开源的监控和警报工具，专注于时序数据的收集和存储。</p>
-</li>
-<li><p>Grafana作为其可视化和仪表板工具，与Prometheus紧密集成，用于监控数据的可视化展示。</p>
-</li>
-</ul>
-</li>
-</ul>
-<blockquote>
-<p><em>我今天实践的是由<strong>Grafana Labs</strong>开发的日志聚合系统，它专注于高效率地收集和存储日志，使用标签而不是索引来组织日志数据，使其在大规模环境中更具可扩展性（轻量级）。想我这种叼毛的服务器装上Elasticsearch+Kibana基本就.gg了别说运行程序了了。</em></p>
-</blockquote>
-<h2 id="所需组件简介"><a href="#所需组件简介" class="headerlink" title="所需组件简介"></a>所需组件简介</h2><p>想要使用轻量级日志系统（Loki + Loki4j + Grafana），首先要理解每个组件的作用和优势：</p>
-<h3 id="什么是-Loki？"><a href="#什么是-Loki？" class="headerlink" title="什么是 Loki？"></a>什么是 Loki？</h3><blockquote>
-<p><strong>Loki</strong> 是由Grafana Labs开发的开源日志聚合系统，专为高效处理和可视化大规模分布式系统的日志数据而设计。与传统的日志系统不同，Loki使用标签索引而非传统的文档索引存储日志数据，这种方式提升了查询效率和存储效率，尤其适合大规模环境的应用。</p>
-</blockquote>
-<h3 id="什么是Loki4j？"><a href="#什么是Loki4j？" class="headerlink" title="什么是Loki4j？"></a>什么是Loki4j？</h3><blockquote>
-<p><strong>Loki4j</strong> 是专为Java应用程序设计的日志库，用于将应用程序的日志数据发送到Loki服务器。它提供简单的API接口，使得在Java应用中集成Loki变得更加便捷高效，充分利用Loki的强大存储和检索能力。</p>
-</blockquote>
-<h3 id="什么是Grafana？"><a href="#什么是Grafana？" class="headerlink" title="什么是Grafana？"></a>什么是Grafana？</h3><p>当谈论Grafana时，可以将其描述为一个强大且灵活的开源数据可视化和监控平台。它最初是为了监控系统指标而开发的，但现在已经发展成为支持多种数据源的广泛应用工具。</p>
-<blockquote>
-<p><strong>Grafana</strong> 是一款开源的数据分析和可视化平台，最初用于监控数据展示和分析。现在，Grafana不仅支持各种数据源（如时序数据库、日志数据库、关系型数据库等），还提供丰富的图表选项和仪表板配置，用户可以通过简单的拖拽操作快速创建和定制监控和分析场景。Grafana还拥有强大的警报功能，帮助用户实时响应数据异常情况。</p>
-</blockquote>
-<h2 id="实践过程"><a href="#实践过程" class="headerlink" title="实践过程"></a>实践过程</h2><h3 id="1-安装Loki和Grafana"><a href="#1-安装Loki和Grafana" class="headerlink" title="1. 安装Loki和Grafana"></a>1. 安装Loki和Grafana</h3><pre><code>[root@bogon ~]# docker run -d --name loki -p 3100:3100 grafana/loki:latest -config.file=/etc/loki/local-config.yaml
-[root@bogon ~]# docker run -d --name grafana -p 3000:3000 grafana/grafana:latest
-</code></pre>
-<p>有需要的可以将配置、数据和日志文件保存到宿主机。</p>
-<blockquote>
-<p>grafana组件安装好后可以过127.0.0.1:3000进入操作页面，默认账号密码:admin。</p>
-</blockquote>
-<p>登录成功以后可以先测试连接loki测试是否连通</p>
-<ol>
-<li>进入Data Source页面Add data source</li>
-</ol>
-<p><img src="https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e5e133cdec2b4a57aa8eca282b3b0384~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2533&h=1303&s=307292&e=png&b=191c21" alt="image-20240619172307402.png"></p>
-<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/dde9a1393d044bfbbfb71da706a40a4e~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2283&h=1146&s=64145&e=png&b=191b20" alt="image-20240619172415963.png"></p>
-<ol start="2">
-<li>点击后输入框搜索Loki后点击填写数据，填写完成后点击Save &amp; test后</li>
-</ol>
-<p><img src="https://p1-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/85e55f45bf884fb9a79d699742d127da~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2541&h=1033&s=76315&e=png&b=111217" alt="image-20240619174025971.png"></p>
-<h3 id="2-配置Loki4j"><a href="#2-配置Loki4j" class="headerlink" title="2. 配置Loki4j"></a>2. 配置Loki4j</h3><p><strong>引入jar包</strong></p>
-<blockquote>
-<pre><code>&lt;dependency&gt;
- &lt;groupId&gt;com.github.loki4j&lt;/groupId&gt;
- &lt;artifactId&gt;loki-logback-appender&lt;/artifactId&gt;
- &lt;version&gt;1.4.1&lt;/version&gt;
-&lt;/dependency&gt;
-</code></pre>
-</blockquote>
-<p><strong>在src&#x2F;main&#x2F;resources下创建logback.xml</strong></p>
-<blockquote>
-<pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
-&lt;configuration&gt;
- &lt;!-- 引入Spring应用名称 --&gt;
- &lt;springProperty scope=&quot;context&quot; name=&quot;name&quot; source=&quot;spring.application.name&quot;/&gt;
- &lt;!-- 控制台输出器 --&gt;
- &lt;appender name=&quot;CONSOLE&quot; class=&quot;ch.qos.logback.core.ConsoleAppender&quot;&gt;
-     &lt;encoder&gt;
-         &lt;pattern&gt;%d&#123;yyyy-MM-dd HH:mm:ss.SSS&#125; [thread %thread] %-5level %logger&#123;36&#125;.%method - $&#123;name&#125; - %msg%n&lt;/pattern&gt;
-     &lt;/encoder&gt;
- &lt;/appender&gt;
-
- &lt;!-- Loki输出器 --&gt;
- &lt;appender name=&quot;LOKI&quot; class=&quot;com.github.loki4j.logback.Loki4jAppender&quot;&gt;
-     &lt;http&gt;
-         &lt;url&gt;http://192.168.56.102:3100/loki/api/v1/push&lt;/url&gt;
-     &lt;/http&gt;
-     &lt;format&gt;
-         &lt;label&gt;
-             &lt;pattern&gt;application=$&#123;name&#125;,level=%level&lt;/pattern&gt;
-             &lt;readMarkers&gt;true&lt;/readMarkers&gt;
-         &lt;/label&gt;
-         &lt;message&gt;
-             &lt;pattern&gt;
-                 &#123;&quot;timestamp&quot;: &quot;%d&#123;yyyy-MM-dd HH:mm:ss.SSS&#125;&quot;, &quot;level&quot;: &quot;%level&quot;, &quot;logger&quot;: &quot;%logger&#123;36&#125;.%method&quot;, &quot;method&quot;:&quot;%M&quot;, &quot;line&quot;:&quot;%line&quot;, &quot;thread&quot;: &quot;%thread&quot;, &quot;message&quot;: &quot;%msg%n&quot;&#125;
-             &lt;/pattern&gt;
-         &lt;/message&gt;
-         &lt;sortByTime&gt;true&lt;/sortByTime&gt;
-     &lt;/format&gt;
- &lt;/appender&gt;
-
- &lt;root level=&quot;INFO&quot;&gt;
-     &lt;appender-ref ref=&quot;CONSOLE&quot;/&gt;
-     &lt;appender-ref ref=&quot;LOKI&quot;/&gt;
- &lt;/root&gt;
-
-&lt;/configuration&gt;
-</code></pre>
-</blockquote>
-<p>在 <strong>application.yml</strong>中</p>
-<blockquote>
-<pre><code>spring:
-application:
- name: blog
-</code></pre>
-</blockquote>
-<p>配置完成后运行程序就可以去garafana查看日志了</p>
-<h3 id="3-查看日志"><a href="#3-查看日志" class="headerlink" title="3. 查看日志"></a>3. 查看日志</h3><p>进入garafana按照步骤就可以查看日志了</p>
-<p><img src="https://p6-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/57c43bd3a14e43c7b869228ce8b9a44f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2536&h=1338&s=322720&e=png&b=191c20" alt="image-20240619230211998.png"><br>此外Loki还支持<a href="https://grafana.com/docs/loki/latest/reference/loki-http-api/">HTTP API</a>的形式操作数据,具体的可以看官网文档。</p>
-]]></content>
-      <categories>
-        <category>Java开发</category>
-        <category>日志管理</category>
-        <category>DevOps工具</category>
-        <category>监控与可视化</category>
-      </categories>
-      <tags>
-        <tag>JAVA</tag>
-        <tag>Loki</tag>
-        <tag>Loki4j</tag>
-        <tag>Grafana</tag>
-        <tag>日志管理</tag>
-        <tag>可视化</tag>
-        <tag>监控工具</tag>
       </tags>
   </entry>
 </search>
